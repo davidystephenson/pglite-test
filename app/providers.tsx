@@ -5,6 +5,8 @@ import { live, PGliteWithLive } from "@electric-sql/pglite/live"
 import { PGliteProvider } from "@electric-sql/pglite-react"
 import { ReactNode, useState, useEffect } from "react"
 import { Repl } from "@electric-sql/pglite-repl"
+import { drizzle, PgliteDatabase } from 'drizzle-orm/pglite';
+import { transactions } from "./schema"
 
 const query = `
      CREATE TABLE IF NOT EXISTS transactions(
@@ -37,16 +39,19 @@ const query = `
 export default function Providers(props: {
   children: ReactNode
 }) {
-  const [db, setDb] = useState<PGliteWithLive>()
+  const [pgLite, setPgLite] = useState<PGliteWithLive>()
+  const [db, setDb] = useState<PgliteDatabase>()
 
   useEffect(() => {
     const initDb = async () => {
-      const database = await PGlite.create({
+      const pgLite = await PGlite.create({
         dataDir: "idb://rentalTaxesDB",
         extensions: { live },
       })
-      setDb(database)
-      await database.exec(query)
+      setPgLite(pgLite)
+      await pgLite.exec(query)
+      const db = drizzle({ connection: { dataDir: 'idb://rentalTaxesDB' }});
+      setDb(db)
     }
 
     initDb()
@@ -56,18 +61,43 @@ export default function Providers(props: {
     return <div>Loading database...</div>
   }
 
-  async function handleClick () {
-    if (!db) return
-    await db.exec(`
-      INSERT INTO transactions (date, arrival_date, type, confirmation_code, booking_date, start_date, end_date, short_term, nights, guest, listing, details, amount, paid_out, service_fee, fast_pay_fee, cleaning_fee, gross_earnings, total_occupancy_taxes, earnings_year, county_tax, state_tax)
-      VALUES ('2022-01-01', '2022-01-02', 'hotel', 'CONF123', '2022-01-01', '2022-01-01', '2022-01-02', 'yes', 1, 'John Doe', 'Hotel XYZ', 'Test booking', 100, 90, 10, 5, 5, 100, 10, 2022, 5, 5)
-    `)
+  async function handleAdd () {
+    await db?.insert(transactions).values({
+      date: '2022-01-01',
+      arrivalDate: '2022-01-02',
+      type: 'hotel',
+      confirmationCode: 'CONF123',
+      bookingDate: '2022-01-01',
+      startDate: '2022-01-01',
+      endDate: '2022-01-02',
+      shortTerm: 'yes',
+      nights: 1,
+      guest: 'Jane Doe',
+      listing: 'Hotel XYZ',
+      details: 'Test booking',
+      amount: 100,
+      paidOut: 90,
+      serviceFee: 10,
+      fastPayFee: 5,
+      cleaningFee: 5,
+      grossEarnings: 100,
+      totalOccupancyTaxes: 10,
+      earningsYear: 2022,
+      countyTax: 5,
+      stateTax: 5,
+    })
+  }
+
+  async function handleLog () {
+    const result = await db?.select().from(transactions)
+    console.log('result', result)
   }
 
   return (
-    <PGliteProvider db={db}>
-      <Repl pg={db} />
-      <button onClick={handleClick}>Add Transaction</button>
+    <PGliteProvider db={pgLite}>
+      <Repl pg={pgLite} />
+      <button onClick={handleAdd}>Add Transaction</button>
+      <button onClick={handleLog}>Log Transactions</button>
       {props.children}
     </PGliteProvider>
   )
